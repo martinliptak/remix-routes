@@ -3,6 +3,7 @@ import meow from 'meow';
 import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
+import debounce from 'lodash.debounce';
 import type { ConfigRoute } from '@remix-run/dev/dist/config/routes';
 
 let readConfig: typeof import('@remix-run/dev/dist/config').readConfig;
@@ -65,6 +66,9 @@ export async function build(remixRoot: string) {
   generate(routesInfo);
 }
 
+// When renaming files, there can be multiple file change events fired, but we need to rebuild only once.
+const buildDebounced = debounce(build, 250);
+
 function watch(remixRoot: string) {
   build(remixRoot);
   chokidar
@@ -73,7 +77,13 @@ function watch(remixRoot: string) {
       path.join(remixRoot, 'remix.config.js'),
     ])
     .on('change', () => {
-      build(remixRoot);
+      buildDebounced(remixRoot);
+    })
+    .on('add', () => {
+      buildDebounced(remixRoot);
+    })
+    .on('unlink', () => {
+      buildDebounced(remixRoot);
     });
   console.log('Watching for routes changes...');
 }
